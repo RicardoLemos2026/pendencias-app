@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pendências">
+<meta name="theme-color" content="#0a0a0a">
+<title>Pendências</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+  --border: #2a2a2a; --border2: #333;
+  --text: #f0ede8; --text2: #8a8580; --text3: #555;
+  --accent: #c8b89a; --accent2: #e8d5b8;
+  --danger: #e05a4a; --warn: #d4924a; --ok: #5aad7a;
+  --radius: 12px; --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: -webkit-fill-available; overflow-x: hidden; }
+
+.header { position: sticky; top: 0; z-index: 100; background: var(--bg); border-bottom: 1px solid var(--border); padding: env(safe-area-inset-top,0) 20px 0; }
+.header-inner { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+.logo { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--accent2); letter-spacing: -0.02em; }
+.logo span { color: var(--text3); font-style: italic; font-size: 14px; margin-left: 4px; }
+.header-actions { display: flex; gap: 8px; }
+.icon-btn { width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.15s; }
+.icon-btn:hover { background: var(--surface2); color: var(--text); }
+.icon-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+.stat { background: var(--bg); padding: 12px 16px; text-align: center; }
+.stat-n { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500; color: var(--accent2); line-height: 1; }
+.stat-n.warn { color: var(--warn); }
+.stat-l { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
+
+.tabs-wrap { padding: 12px 20px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--border); }
+.tabs-wrap::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.tab.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 500; }
+
+/* PERSON FILTER */
+.person-filter { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.person-filter label { font-size: 12px; color: var(--text3); white-space: nowrap; }
+.person-filter select { flex: 1; font-size: 13px; padding: 6px 10px; }
+
+.add-form { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.add-main { display: flex; gap: 8px; }
+.add-extras { display: flex; gap: 8px; flex-wrap: wrap; }
+input, select { font-family: 'DM Sans', sans-serif; font-size: 14px; background: var(--surface); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius-sm); padding: 9px 12px; outline: none; transition: border-color 0.15s; }
+input::placeholder { color: var(--text3); }
+input:focus, select:focus { border-color: var(--accent); }
+select { cursor: pointer; }
+select option { background: var(--surface); }
+.inp-main { flex: 1; }
+.inp-pessoa { flex: 1; min-width: 120px; }
+.inp-prazo { min-width: 130px; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.4); }
+.btn-add { padding: 9px 18px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: var(--accent); color: var(--bg); font-size: 14px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.btn-add:hover { background: var(--accent2); border-color: var(--accent2); }
+.btn-add:active { transform: scale(0.97); }
+.btn-mic { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+.btn-mic:hover { border-color: var(--accent); color: var(--accent); }
+.btn-mic.listening { background: var(--danger); border-color: var(--danger); color: white; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+.lista { padding: 0 20px 120px; }
+.item { padding: 14px 0; border-bottom: 1px solid var(--border); animation: slideIn 0.2s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+.item-main { display: flex; align-items: flex-start; gap: 12px; }
+.item-check { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 10px; }
+.item-check:hover { border-color: var(--accent); }
+.item-check.checked { background: var(--ok); border-color: var(--ok); color: white; }
+.item-body { flex: 1; min-width: 0; }
+.item-text { font-size: 15px; color: var(--text); line-height: 1.4; word-break: break-word; }
+.item-text.done { text-decoration: line-through; color: var(--text3); }
+.item-tags { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
+.tag { font-size: 11px; padding: 2px 9px; border-radius: 20px; font-weight: 400; font-family: 'DM Mono', monospace; letter-spacing: 0.02em; }
+.tag-trabalho { background: #1a2535; color: #6aabda; border: 1px solid #1e3a55; }
+.tag-delegada { background: #2a1e0a; color: #d4924a; border: 1px solid #4a3010; }
+.tag-projeto { background: #1e1a2e; color: #9a7ad5; border: 1px solid #342a4e; }
+.tag-pessoal { background: #0a2015; color: #5aad7a; border: 1px solid #0e3520; }
+.tag-cliente { background: #1e0f1a; color: #d47ab5; border: 1px solid #3e1a32; }
+.tag-pessoa { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
+.tag-prazo { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
+.tag-atrasado { background: #2a0e0a; color: var(--danger); border: 1px solid #4a1e18; }
+.item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.item-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 2px; transition: color 0.15s; }
+.item-del:hover { color: var(--danger); }
+.btn-update { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 0 4px; transition: color 0.15s; white-space: nowrap; }
+.btn-update:hover { color: var(--accent); }
+.btn-edit { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 0 4px; transition: color 0.15s; white-space: nowrap; }
+.btn-edit:hover { color: var(--accent2); }
+
+/* EDIT FORM inline */
+.edit-form { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.edit-form-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.edit-form input, .edit-form select { font-size: 13px; padding: 7px 10px; }
+.edit-form .inp-edit-text { width: 100%; }
+.edit-form .inp-edit-pessoa { flex: 1; min-width: 100px; }
+.edit-form .inp-edit-prazo { min-width: 130px; }
+.edit-actions { display: flex; gap: 6px; }
+.btn-save-edit { padding: 7px 16px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: var(--accent); color: var(--bg); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+.btn-save-edit:hover { background: var(--accent2); }
+.btn-cancel-edit { padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+
+/* HISTORICO */
+.historico { margin-top: 10px; padding-left: 32px; }
+.hist-entry { display: flex; gap: 8px; padding: 5px 0; border-left: 1px solid var(--border2); margin-left: 4px; padding-left: 12px; }
+.hist-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; margin-top: 5px; margin-left: -15px; }
+.hist-text { font-size: 13px; color: var(--text2); flex: 1; line-height: 1.4; }
+.hist-date { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; flex-shrink: 0; margin-top: 1px; }
+.hist-toggle { background: none; border: none; color: var(--text3); font-size: 11px; cursor: pointer; padding: 4px 0; display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.hist-toggle:hover { color: var(--text2); }
+
+/* UPDATE FORM inline */
+.update-form { margin-top: 10px; padding-left: 32px; display: flex; gap: 8px; }
+.update-form input { flex: 1; font-size: 13px; padding: 7px 10px; }
+.btn-save-update { padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; white-space: nowrap; }
+.btn-save-update:hover { background: var(--accent); color: var(--bg); }
+.btn-cancel-update { padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+
+.empty { text-align: center; padding: 48px 20px; color: var(--text3); font-style: italic; font-family: 'DM Serif Display', serif; font-size: 16px; }
+
+.briefing-panel { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border2); padding: 12px 20px env(safe-area-inset-bottom, 12px); display: flex; gap: 8px; }
+.btn-briefing { flex: 1; padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--surface2); color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+.btn-briefing:hover { border-color: var(--accent); color: var(--accent); }
+.btn-briefing .icon { font-size: 16px; }
+
+.ai-panel { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }
+.ai-panel.open { transform: translateY(0); }
+.ai-header { padding: env(safe-area-inset-top,0) 20px 0; border-bottom: 1px solid var(--border); }
+.ai-header-inner { height: 56px; display: flex; align-items: center; justify-content: space-between; }
+.ai-title { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--accent2); }
+.ai-close { background: none; border: none; color: var(--text2); font-size: 22px; cursor: pointer; padding: 4px; }
+.ai-content { flex: 1; overflow-y: auto; padding: 20px; }
+.ai-loading { display: flex; align-items: center; gap: 10px; color: var(--text2); font-size: 14px; padding: 20px 0; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ai-message { font-size: 15px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+.ai-message h3 { font-family: 'DM Serif Display', serif; font-size: 17px; color: var(--accent2); margin: 20px 0 8px; font-weight: 400; }
+.ai-message h3:first-child { margin-top: 0; }
+.ai-message strong { color: var(--accent); font-weight: 500; }
+.ai-input-area { padding: 12px 20px env(safe-area-inset-bottom,12px); border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.ai-input { flex: 1; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; }
+.ai-input:focus { border-color: var(--accent); }
+.btn-send { padding: 10px 18px; border-radius: var(--radius-sm); border: 1px solid var(--accent); background: var(--accent); color: var(--bg); font-size: 14px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+.btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.user-msg { font-size: 14px; color: var(--text2); padding: 8px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+
+@media (max-width: 400px) { .add-extras { flex-direction: column; } .inp-prazo { min-width: unset; width: 100%; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">Pendências <span>/ ricardo</span></div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-toggle-form" title="Adicionar">＋</button>
+      <button class="icon-btn" id="btn-export" title="Exportar backup">↓</button>
+      <label class="icon-btn" id="btn-import-label" title="Importar backup" style="cursor:pointer;">↑<input type="file" id="inp-import" accept=".json" style="display:none;"></label>
+    </div>
+  </div>
+</div>
+
+<div class="stats-bar" id="stats"></div>
+
+<div class="tabs-wrap" id="tabs">
+  <button class="tab active" data-filter="abertas">Abertas</button>
+  <button class="tab" data-filter="trabalho">Trabalho</button>
+  <button class="tab" data-filter="delegada">Delegadas</button>
+  <button class="tab" data-filter="projeto">Projetos</button>
+  <button class="tab" data-filter="cliente">Clientes</button>
+  <button class="tab" data-filter="pessoal">Pessoal</button>
+  <button class="tab" data-filter="concluidas">Concluídas</button>
+</div>
+
+<div class="person-filter" id="person-filter-wrap">
+  <label>Filtrar por pessoa:</label>
+  <select id="filter-pessoa">
+    <option value="">Todos</option>
+  </select>
+</div>
+
+<div class="add-form" id="add-form">
+  <div class="add-main">
+    <input class="inp-main" id="inp-text" placeholder="O que está pendente?" autocomplete="off" />
+    <button class="btn-mic" id="btn-mic" title="Adicionar por voz">🎤</button>
+    <button class="btn-add" id="btn-add">Adicionar</button>
+  </div>
+  <div class="add-extras">
+    <select id="inp-tipo">
+      <option value="trabalho">Trabalho</option>
+      <option value="delegada">Delegada</option>
+      <option value="projeto">Projeto</option>
+      <option value="cliente">Cliente</option>
+      <option value="pessoal">Pessoal</option>
+    </select>
+    <input class="inp-pessoa" id="inp-pessoa" placeholder="Quem? / Cliente?" autocomplete="off" />
+    <input class="inp-prazo" id="inp-prazo" type="date" />
+  </div>
+</div>
+
+<div class="lista" id="lista"></div>
+
+<div class="briefing-panel">
+  <button class="btn-briefing" id="btn-briefing"><span class="icon">☀</span> Briefing do dia</button>
+  <button class="btn-briefing" id="btn-assistente" style="flex:0;padding:12px 14px;"><span class="icon">✦</span> Assistente</button>
+</div>
+
+<div class="ai-panel" id="ai-panel">
+  <div class="ai-header">
+    <div class="ai-header-inner">
+      <div class="ai-title" id="ai-panel-title">Briefing do dia</div>
+      <button class="ai-close" id="ai-close">✕</button>
+    </div>
+  </div>
+  <div class="ai-content" id="ai-content"></div>
+  <div class="ai-input-area">
+    <input class="ai-input" id="ai-input" placeholder="Pergunte algo ou atualize uma pendência..." />
+    <button class="btn-send" id="btn-send">→</button>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'pendencias_v3';
+let items = [];
+let filter = 'abertas';
+let filterPessoa = '';
+let aiMessages = [];
+let aiLoading = false;
+let expandedUpdates = {};
+let showUpdateForm = {};
+let showEditForm = {};
+
+function loadItems() {
+  try { items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { items = []; }
+  // migrate old items without historico
+  items.forEach(i => { if (!i.historico) i.historico = []; });
+}
+function saveItems() { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+
+function isAtrasado(prazo) {
+  if (!prazo) return false;
+  return new Date(prazo + 'T23:59:59') < new Date();
+}
+function fmtPrazo(prazo) {
+  if (!prazo) return '';
+  return new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+}
+
+const tipoLabel = { trabalho:'trabalho', delegada:'delegada', projeto:'projeto', pessoal:'pessoal', cliente:'cliente' };
+
+function getPessoas() {
+  const set = new Set();
+  items.forEach(i => { if (i.pessoa) set.add(i.pessoa); });
+  return [...set].sort();
+}
+
+function renderStats() {
+  const abertas = items.filter(i => !i.done);
+  const atrasadas = abertas.filter(i => isAtrasado(i.prazo));
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-n">${abertas.length}</div><div class="stat-l">abertas</div></div>
+    <div class="stat"><div class="stat-n">${items.filter(i=>!i.done&&i.tipo==='delegada').length}</div><div class="stat-l">delegadas</div></div>
+    <div class="stat"><div class="stat-n ${atrasadas.length>0?'warn':''}">${atrasadas.length}</div><div class="stat-l">atrasadas</div></div>
+    <div class="stat"><div class="stat-n">${items.filter(i=>i.done).length}</div><div class="stat-l">feitas</div></div>
+  `;
+}
+
+function renderPessoaFilter() {
+  const sel = document.getElementById('filter-pessoa');
+  const current = sel.value;
+  const pessoas = getPessoas();
+  sel.innerHTML = `<option value="">Todos</option>` + pessoas.map(p => `<option value="${p}" ${p===current?'selected':''}>${p}</option>`).join('');
+}
+
+function renderItem(item) {
+  const atrasado = isAtrasado(item.prazo);
+  const prazoStr = fmtPrazo(item.prazo);
+  const hasHist = item.historico && item.historico.length > 0;
+  const isExpanded = expandedUpdates[item.id];
+  const isUpdating = showUpdateForm[item.id];
+  const isEditing = showEditForm[item.id];
+
+  const histHtml = hasHist ? `
+    <button class="hist-toggle" onclick="toggleHist('${item.id}')">
+      ${isExpanded ? '▲' : '▼'} ${item.historico.length} atualização${item.historico.length>1?'ões':''}
+    </button>
+    ${isExpanded ? `<div class="historico">` + item.historico.slice().reverse().map(h => `
+      <div class="hist-entry">
+        <div class="hist-dot"></div>
+        <div class="hist-text">${h.texto}</div>
+        <div class="hist-date">${fmtDate(h.data)}</div>
+      </div>
+    `).join('') + `</div>` : ''}
+  ` : '';
+
+  const updateFormHtml = isUpdating ? `
+    <div class="update-form">
+      <input id="upd-${item.id}" placeholder="O que aconteceu? Nova informação..." autocomplete="off" />
+      <button class="btn-save-update" onclick="saveUpdate('${item.id}')">Salvar</button>
+      <button class="btn-cancel-update" onclick="cancelUpdate('${item.id}')">✕</button>
+    </div>
+  ` : '';
+
+  const editFormHtml = isEditing ? `
+    <div class="edit-form">
+      <input class="inp-edit-text" id="edit-text-${item.id}" value="${item.text.replace(/"/g,'&quot;')}" autocomplete="off" />
+      <div class="edit-form-row">
+        <select id="edit-tipo-${item.id}">
+          <option value="trabalho" ${item.tipo==='trabalho'?'selected':''}>Trabalho</option>
+          <option value="delegada" ${item.tipo==='delegada'?'selected':''}>Delegada</option>
+          <option value="projeto" ${item.tipo==='projeto'?'selected':''}>Projeto</option>
+          <option value="cliente" ${item.tipo==='cliente'?'selected':''}>Cliente</option>
+          <option value="pessoal" ${item.tipo==='pessoal'?'selected':''}>Pessoal</option>
+        </select>
+        <input class="inp-edit-pessoa" id="edit-pessoa-${item.id}" value="${item.pessoa||''}" placeholder="Quem? / Cliente?" autocomplete="off" />
+        <input class="inp-edit-prazo" id="edit-prazo-${item.id}" type="date" value="${item.prazo||''}" />
+      </div>
+      <div class="edit-actions">
+        <button class="btn-save-edit" onclick="saveEdit('${item.id}')">Salvar edição</button>
+        <button class="btn-cancel-edit" onclick="cancelEdit('${item.id}')">Cancelar</button>
+      </div>
+    </div>
+  ` : '';
+
+  return `
+    <div class="item" id="item-${item.id}">
+      <div class="item-main">
+        <div class="item-check ${item.done?'checked':''}" onclick="toggle('${item.id}')">${item.done?'✓':''}</div>
+        <div class="item-body">
+          <div class="item-text ${item.done?'done':''}">${item.text}</div>
+          <div class="item-tags">
+            <span class="tag tag-${item.tipo}">${tipoLabel[item.tipo]}</span>
+            ${item.pessoa ? `<span class="tag tag-pessoa">${item.pessoa}</span>` : ''}
+            ${prazoStr ? `<span class="tag ${atrasado?'tag-atrasado':'tag-prazo'}">${atrasado?'⚠ ':''}${prazoStr}</span>` : ''}
+          </div>
+          ${editFormHtml}
+          ${!isEditing ? histHtml : ''}
+          ${!isEditing ? updateFormHtml : ''}
+        </div>
+        <div class="item-actions">
+          ${!item.done && !isEditing ? `<button class="btn-edit" onclick="toggleEditForm('${item.id}')" title="Editar">✎</button>` : ''}
+          ${!item.done && !isEditing ? `<button class="btn-update" onclick="toggleUpdateForm('${item.id}')" title="Adicionar atualização">+ update</button>` : ''}
+          <button class="item-del" onclick="del('${item.id}')">×</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderLista() {
+  const lista = document.getElementById('lista');
+  let visible;
+  if (filter === 'abertas') visible = items.filter(i => !i.done);
+  else if (filter === 'concluidas') visible = items.filter(i => i.done);
+  else visible = items.filter(i => !i.done && i.tipo === filter);
+
+  if (filterPessoa) visible = visible.filter(i => i.pessoa === filterPessoa);
+
+  if (!visible.length) {
+    lista.innerHTML = `<p class="empty">Nenhuma pendência aqui.</p>`;
+    return;
+  }
+  lista.innerHTML = visible.map(renderItem).join('');
+
+  // restore focus on update inputs
+  Object.keys(showUpdateForm).forEach(id => {
+    if (showUpdateForm[id]) {
+      const inp = document.getElementById('upd-' + id);
+      if (inp) inp.focus();
+    }
+  });
+}
+
+function render() { renderStats(); renderPessoaFilter(); renderLista(); }
+
+// --- HISTORICO ---
+function toggleHist(id) {
+  expandedUpdates[id] = !expandedUpdates[id];
+  renderLista();
+}
+
+function toggleUpdateForm(id) {
+  showUpdateForm[id] = !showUpdateForm[id];
+  renderLista();
+}
+
+function cancelUpdate(id) {
+  delete showUpdateForm[id];
+  renderLista();
+}
+
+function toggleEditForm(id) {
+  showEditForm[id] = !showEditForm[id];
+  if (showEditForm[id]) delete showUpdateForm[id];
+  renderLista();
+  setTimeout(() => {
+    const inp = document.getElementById('edit-text-' + id);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+function cancelEdit(id) {
+  delete showEditForm[id];
+  renderLista();
+}
+
+function saveEdit(id) {
+  const text = document.getElementById('edit-text-' + id)?.value.trim();
+  if (!text) return;
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.text = text;
+  item.tipo = document.getElementById('edit-tipo-' + id)?.value || item.tipo;
+  item.pessoa = document.getElementById('edit-pessoa-' + id)?.value.trim() || '';
+  item.prazo = document.getElementById('edit-prazo-' + id)?.value || '';
+  delete showEditForm[id];
+  saveItems();
+  render();
+}
+
+function saveUpdate(id) {
+  const inp = document.getElementById('upd-' + id);
+  const texto = inp ? inp.value.trim() : '';
+  if (!texto) return;
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  if (!item.historico) item.historico = [];
+  item.historico.push({ texto, data: new Date().toISOString() });
+  delete showUpdateForm[id];
+  expandedUpdates[id] = true;
+  saveItems();
+  renderLista();
+}
+
+// --- ACTIONS ---
+function toggle(id) {
+  const item = items.find(i => i.id === id);
+  if (item) { item.done = !item.done; saveItems(); render(); }
+}
+function del(id) {
+  if (!confirm('Remover esta pendência?')) return;
+  items = items.filter(i => i.id !== id);
+  saveItems(); render();
+}
+
+document.getElementById('btn-add').onclick = addItem;
+document.getElementById('inp-text').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+
+function addItem() {
+  const text = document.getElementById('inp-text').value.trim();
+  if (!text) return;
+  items.unshift({
+    id: Date.now().toString(),
+    text,
+    tipo: document.getElementById('inp-tipo').value,
+    pessoa: document.getElementById('inp-pessoa').value.trim(),
+    prazo: document.getElementById('inp-prazo').value,
+    done: false,
+    historico: [],
+    criadoEm: new Date().toISOString()
+  });
+  document.getElementById('inp-text').value = '';
+  document.getElementById('inp-pessoa').value = '';
+  document.getElementById('inp-prazo').value = '';
+  saveItems(); render();
+  document.getElementById('inp-text').focus();
+}
+
+// --- TABS ---
+document.getElementById('tabs').addEventListener('click', e => {
+  if (!e.target.dataset.filter) return;
+  filter = e.target.dataset.filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  e.target.classList.add('active');
+  renderLista();
+});
+
+// --- PERSON FILTER ---
+document.getElementById('filter-pessoa').onchange = e => {
+  filterPessoa = e.target.value;
+  renderLista();
+};
+
+// --- TOGGLE FORM ---
+document.getElementById('btn-toggle-form').onclick = () => {
+  const form = document.getElementById('add-form');
+  const btn = document.getElementById('btn-toggle-form');
+  const hidden = form.style.display === 'none';
+  form.style.display = hidden ? '' : 'none';
+  btn.classList.toggle('active', hidden);
+};
+
+// --- AI ---
+function openAI(title, initialPrompt) {
+  document.getElementById('ai-panel-title').textContent = title;
+  document.getElementById('ai-panel').classList.add('open');
+  document.getElementById('ai-content').innerHTML = '';
+  aiMessages = [];
+  if (initialPrompt) sendAI(initialPrompt);
+}
+document.getElementById('ai-close').onclick = () => {
+  document.getElementById('ai-panel').classList.remove('open');
+};
+
+document.getElementById('btn-briefing').onclick = () => {
+  const abertas = items.filter(i => !i.done);
+  const hoje = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
+  const prompt = `Você é um assistente executivo pessoal. Hoje é ${hoje}.
+
+Minhas pendências abertas:
+${abertas.length === 0 ? 'Nenhuma.' : abertas.map(i => {
+  const hist = i.historico && i.historico.length > 0 ? ` [último update: "${i.historico[i.historico.length-1].texto}"]` : '';
+  return `- [${i.tipo.toUpperCase()}] ${i.text}${i.pessoa?` (${i.pessoa})`:''}${i.prazo?` prazo: ${fmtPrazo(i.prazo)}${isAtrasado(i.prazo)?' ATRASADO':''}`:''}${hist}`;
+}).join('\n')}
+
+Faça meu briefing matinal. Destaque atrasados, o que cobrar de quem, e o que eu preciso fazer hoje. Tom executivo, direto. Máximo 200 palavras.`;
+  openAI('☀ Briefing do dia', prompt);
+};
+
+document.getElementById('btn-assistente').onclick = () => {
+  openAI('✦ Assistente', null);
+  document.getElementById('ai-content').innerHTML = `<p style="color:var(--text2);font-size:14px;padding-top:8px;">Me pergunte qualquer coisa, ou diga:<br><br>
+  <span style="color:var(--text3)">→ "O João me entregou o relatório"<br>→ "Quais pendências do cliente X?"<br>→ "O que está atrasado com meu time?"<br>→ "Me ajuda a priorizar hoje"</span></p>`;
+};
+
+async function sendAI(userMsg) {
+  if (aiLoading) return;
+  aiLoading = true;
+  if (userMsg != null) aiMessages.push({ role: 'user', content: userMsg });
+  const content = document.getElementById('ai-content');
+  const loadDiv = document.createElement('div');
+  loadDiv.className = 'ai-loading';
+  loadDiv.innerHTML = '<div class="spinner"></div><span>Pensando...</span>';
+  content.appendChild(loadDiv);
+  content.scrollTop = content.scrollHeight;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `Você é um assistente executivo pessoal. Seja direto, prático e humano. Fale português do Brasil. Nunca use bullet points excessivos — prefira texto fluido. Quando o usuário disser que alguém entregou algo, confirme e sugira marcar como feito.`,
+        messages: aiMessages
+      })
+    });
+    const data = await res.json();
+    loadDiv.remove();
+    const reply = data.content?.[0]?.text || 'Não consegui processar.';
+    aiMessages.push({ role: 'assistant', content: reply });
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'ai-message';
+    msgDiv.innerHTML = reply.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^###? (.+)$/gm,'<h3>$1</h3>').split('\n').join('<br>');
+    content.appendChild(msgDiv);
+    content.scrollTop = content.scrollHeight;
+  } catch(e) {
+    loadDiv.remove();
+    const err = document.createElement('div');
+    err.style.cssText = 'color:var(--danger);font-size:14px;padding:8px 0;';
+    err.textContent = 'Erro ao conectar. Verifique sua conexão.';
+    content.appendChild(err);
+  }
+  aiLoading = false;
+}
+
+document.getElementById('btn-send').onclick = () => {
+  const input = document.getElementById('ai-input');
+  const msg = input.value.trim();
+  if (!msg || aiLoading) return;
+  input.value = '';
+  const content = document.getElementById('ai-content');
+  const userDiv = document.createElement('div');
+  userDiv.className = 'user-msg';
+  userDiv.textContent = '→ ' + msg;
+  content.appendChild(userDiv);
+  sendAI(msg);
+};
+document.getElementById('ai-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-send').click(); });
+
+
+// --- EXPORT / IMPORT ---
+document.getElementById("btn-export").onclick = () => {
+  const data = { pendencias: items, exportadoEm: new Date().toISOString(), versao: "v5" };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const hoje = new Date().toLocaleDateString("pt-BR").replace(///g, "-");
+  a.href = url; a.download = "pendencias-backup-" + hoje + ".json";
+  a.click(); URL.revokeObjectURL(url);
+};
+
+document.getElementById("inp-import").onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const importados = data.pendencias || data;
+      if (!Array.isArray(importados)) { alert("Arquivo inválido."); return; }
+      if (!confirm("Importar " + importados.length + " pendências? Isso vai substituir os dados atuais.")) return;
+      items = importados.map(i => ({ ...i, historico: i.historico || [] }));
+      saveItems(); render();
+      alert("Importado com sucesso! " + importados.length + " pendências carregadas.");
+    } catch(err) { alert("Erro ao ler o arquivo. Verifique se é um backup válido."); }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+};
+
+
+// --- VOZ ---
+const btnMic = document.getElementById("btn-mic");
+let recognition = null;
+let isListening = false;
+
+if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = "pt-BR";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    isListening = true;
+    btnMic.classList.add("listening");
+    btnMic.title = "Ouvindo... toque para parar";
+    document.getElementById("inp-text").placeholder = "Ouvindo...";
+  };
+
+  recognition.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join("");
+    document.getElementById("inp-text").value = transcript;
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    btnMic.classList.remove("listening");
+    btnMic.title = "Adicionar por voz";
+    document.getElementById("inp-text").placeholder = "O que está pendente?";
+    const text = document.getElementById("inp-text").value.trim();
+    if (text) document.getElementById("inp-text").focus();
+  };
+
+  recognition.onerror = (e) => {
+    isListening = false;
+    btnMic.classList.remove("listening");
+    document.getElementById("inp-text").placeholder = "O que está pendente?";
+    if (e.error === "not-allowed") alert("Permita o acesso ao microfone nas configurações do navegador.");
+  };
+
+  btnMic.onclick = () => {
+    if (isListening) { recognition.stop(); }
+    else { document.getElementById("inp-text").value = ""; recognition.start(); }
+  };
+} else {
+  btnMic.style.display = "none";
+}
+
+loadItems();
+render();
+</script>
+</body>
+</html>
