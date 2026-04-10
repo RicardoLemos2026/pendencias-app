@@ -384,7 +384,7 @@ function renderItem(item) {
     '<div class="item-row">'+
     '<div class="chk'+(item.done?' done':'')+'" onclick="toggleDone(\''+item.id+'\')">'+(item.done?'✓':'')+'</div>'+
     '<div class="item-body">'+
-    '<div class="item-txt'+(item.done?' done':'\'")">'+esc(item.txt)+'</div>'+
+    '<div class="item-txt'+(item.done?' done':'')+'">'+esc(item.txt)+'</div>'+
     '<div class="tags">'+tags+'</div>'+
     (!isEdt ? histHTML : '')+
     edtHTML+
