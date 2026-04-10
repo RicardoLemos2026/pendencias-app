@@ -31,6 +31,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-h
 .ibtn:hover{background:var(--sur2);color:var(--tx)}
 .ibtn.on{background:var(--ac);color:var(--bg);border-color:var(--ac)}
 
+/* SYNC STATUS */
+.sync{font-size:11px;color:var(--tx3);padding:4px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:6px;min-height:24px}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--tx3);flex-shrink:0}
+.sync-dot.ok{background:var(--grn)}
+.sync-dot.err{background:var(--red)}
+.sync-dot.loading{background:var(--ora);animation:pulse2 1s infinite}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.3}}
+
 /* STATS */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bd);border-bottom:1px solid var(--bd)}
 .stat{background:var(--bg);padding:12px 8px;text-align:center}
@@ -128,8 +136,6 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
 
 /* EMPTY */
 .empty{text-align:center;padding:48px 20px;color:var(--tx3);font-style:italic;font-family:'DM Serif Display',serif;font-size:16px}
-
-
 </style>
 </head>
 <body>
@@ -143,6 +149,11 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
       <label class="ibtn" title="Importar backup" style="cursor:pointer">↑<input type="file" id="inp-imp" accept=".json" style="display:none"></label>
     </div>
   </div>
+</div>
+
+<div class="sync" id="sync-bar">
+  <div class="sync-dot loading" id="sync-dot"></div>
+  <span id="sync-txt">Conectando...</span>
 </div>
 
 <div class="stats" id="stats"></div>
@@ -183,9 +194,13 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
 
 <div class="list" id="list"></div>
 
-
 <script>
-var KEY = 'pend_v8';
+// ===== SUPABASE CONFIG =====
+var SUPA_URL = 'https://yccqvlpunmwcpyrvurtr.supabase.co';
+var SUPA_KEY = 'sb_publishable_5Wu2Z375PFMcN6wXu3oqeQ_v_xNrH2M';
+var TABLE = 'pendencias';
+
+// ===== STATE =====
 var items = [];
 var filter = 'abertas';
 var filterWho = '';
@@ -193,12 +208,87 @@ var expanded = {};
 var updOpen = {};
 var edtOpen = {};
 
-function load() {
-  try { items = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { items = []; }
-  items.forEach(function(i) { if (!i.hist) i.hist = []; });
+// ===== SUPABASE API =====
+function supaHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPA_KEY,
+    'Authorization': 'Bearer ' + SUPA_KEY,
+    'Prefer': 'return=representation'
+  };
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch(e) {} }
 
+function setSyncStatus(status, msg) {
+  var dot = document.getElementById('sync-dot');
+  var txt = document.getElementById('sync-txt');
+  dot.className = 'sync-dot ' + status;
+  txt.textContent = msg;
+}
+
+async function loadFromSupabase() {
+  setSyncStatus('loading', 'Carregando...');
+  try {
+    var res = await fetch(SUPA_URL + '/rest/v1/' + TABLE + '?order=criado_em.desc', {
+      headers: supaHeaders()
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+    items = data.map(function(row) {
+      var d = typeof row.dados === 'string' ? JSON.parse(row.dados) : row.dados;
+      return Object.assign({ hist: [] }, d, { _dbid: row.id });
+    });
+    setSyncStatus('ok', 'Sincronizado · ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}));
+    render();
+  } catch(e) {
+    setSyncStatus('err', 'Erro de conexão');
+    // fallback to localStorage
+    try { items = JSON.parse(localStorage.getItem('pend_v8') || '[]'); } catch(x) { items = []; }
+    render();
+  }
+}
+
+async function saveToSupabase(item) {
+  var payload = { dados: JSON.stringify(item) };
+  try {
+    if (item._dbid) {
+      // update
+      await fetch(SUPA_URL + '/rest/v1/' + TABLE + '?id=eq.' + item._dbid, {
+        method: 'PATCH',
+        headers: supaHeaders(),
+        body: JSON.stringify(payload)
+      });
+    } else {
+      // insert
+      var res = await fetch(SUPA_URL + '/rest/v1/' + TABLE, {
+        method: 'POST',
+        headers: supaHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        var rows = await res.json();
+        if (rows && rows[0]) item._dbid = rows[0].id;
+      }
+    }
+    setSyncStatus('ok', 'Salvo · ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}));
+  } catch(e) {
+    setSyncStatus('err', 'Erro ao salvar');
+  }
+}
+
+async function deleteFromSupabase(item) {
+  if (!item._dbid) return;
+  try {
+    await fetch(SUPA_URL + '/rest/v1/' + TABLE + '?id=eq.' + item._dbid, {
+      method: 'DELETE',
+      headers: supaHeaders()
+    });
+    setSyncStatus('ok', 'Removido · ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}));
+  } catch(e) {
+    setSyncStatus('err', 'Erro ao remover');
+  }
+}
+
+// ===== HELPERS =====
 function isLate(p) {
   if (!p) return false;
   return new Date(p + 'T23:59:59') < new Date();
@@ -227,7 +317,7 @@ function renderStats() {
   document.getElementById('stats').innerHTML =
     '<div class="stat"><div class="sn">'+ab.length+'</div><div class="sl">abertas</div></div>' +
     '<div class="stat"><div class="sn">'+del.length+'</div><div class="sl">delegadas</div></div>' +
-    '<div class="stat"><div class="sn'+(late.length>0?' w':'')+'">'+late.length+'</div><div class="sl">atrasadas</div></div>' +
+    '<div class="stat"><div class="sn'+(late.length>0?' w':'')+'" >'+late.length+'</div><div class="sl">atrasadas</div></div>' +
     '<div class="stat"><div class="sn">'+dn.length+'</div><div class="sl">feitas</div></div>';
 }
 
@@ -294,7 +384,7 @@ function renderItem(item) {
     '<div class="item-row">'+
     '<div class="chk'+(item.done?' done':'')+'" onclick="toggleDone(\''+item.id+'\')">'+(item.done?'✓':'')+'</div>'+
     '<div class="item-body">'+
-    '<div class="item-txt'+(item.done?' done':'')+'">'+esc(item.txt)+'</div>'+
+    '<div class="item-txt'+(item.done?' done':'\'")">'+esc(item.txt)+'</div>'+
     '<div class="tags">'+tags+'</div>'+
     (!isEdt ? histHTML : '')+
     edtHTML+
@@ -323,15 +413,17 @@ function renderList() {
 
 function render() { renderStats(); renderWhoFilter(); renderList(); }
 
-// ACTIONS
+// ===== ACTIONS =====
 function toggleDone(id) {
   var it = items.find(function(i){return i.id===id;});
-  if (it) { it.done = !it.done; save(); render(); }
+  if (it) { it.done = !it.done; render(); saveToSupabase(it); }
 }
-function delItem(id) {
+async function delItem(id) {
   if (!confirm('Remover esta pendência?')) return;
+  var it = items.find(function(i){return i.id===id;});
   items = items.filter(function(i){return i.id!==id;});
-  save(); render();
+  render();
+  if (it) await deleteFromSupabase(it);
 }
 function toggleH(id) { expanded[id] = !expanded[id]; renderList(); }
 function openUpd(id) { updOpen[id] = true; edtOpen[id] = false; renderList(); }
@@ -345,7 +437,8 @@ function saveUpd(id) {
   it.hist.push({txt:txt, dt:new Date().toISOString()});
   delete updOpen[id];
   expanded[id] = true;
-  save(); renderList();
+  render();
+  saveToSupabase(it);
 }
 function openEdt(id) { edtOpen[id] = true; updOpen[id] = false; renderList(); }
 function closeEdt(id) { delete edtOpen[id]; renderList(); }
@@ -362,11 +455,12 @@ function saveEdt(id) {
   it.who = who ? who.value.trim() : '';
   it.prazo = dt ? dt.value : '';
   delete edtOpen[id];
-  save(); render();
+  render();
+  saveToSupabase(it);
 }
 
-// ADD
-function addItem() {
+// ===== ADD =====
+async function addItem() {
   var txt = document.getElementById('inp-txt').value.trim();
   if (!txt) return;
   var newItem = {
@@ -383,14 +477,15 @@ function addItem() {
   document.getElementById('inp-txt').value = '';
   document.getElementById('inp-who').value = '';
   document.getElementById('inp-dt').value = '';
-  save(); render();
+  render();
   document.getElementById('inp-txt').focus();
+  await saveToSupabase(newItem);
 }
 
 document.getElementById('btn-add').addEventListener('click', addItem);
 document.getElementById('inp-txt').addEventListener('keydown', function(e){ if (e.key==='Enter') addItem(); });
 
-// TABS
+// ===== TABS =====
 document.getElementById('tabs').addEventListener('click', function(e){
   var t = e.target.closest('.tab');
   if (!t) return;
@@ -400,12 +495,12 @@ document.getElementById('tabs').addEventListener('click', function(e){
   renderList();
 });
 
-// PERSON FILTER
+// ===== PERSON FILTER =====
 document.getElementById('sel-who').addEventListener('change', function(e){
   filterWho = e.target.value; renderList();
 });
 
-// TOGGLE FORM
+// ===== TOGGLE FORM =====
 document.getElementById('btn-form').addEventListener('click', function(){
   var f = document.getElementById('form');
   var hidden = f.style.display === 'none';
@@ -413,7 +508,7 @@ document.getElementById('btn-form').addEventListener('click', function(){
   document.getElementById('btn-form').classList.toggle('on', hidden);
 });
 
-// EXPORT
+// ===== EXPORT =====
 document.getElementById('btn-exp').addEventListener('click', function(){
   var data = {pendencias: items, em: new Date().toISOString(), v: 'v8'};
   var blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
@@ -425,19 +520,25 @@ document.getElementById('btn-exp').addEventListener('click', function(){
   URL.revokeObjectURL(url);
 });
 
-// IMPORT
+// ===== IMPORT =====
 document.getElementById('inp-imp').addEventListener('change', function(e){
   var file = e.target.files[0];
   if (!file) return;
   var r = new FileReader();
-  r.onload = function(ev){
+  r.onload = async function(ev){
     try {
       var data = JSON.parse(ev.target.result);
       var imp = data.pendencias || data;
       if (!Array.isArray(imp)) { alert('Arquivo inválido.'); return; }
       if (!confirm('Importar '+imp.length+' pendências? Substitui os dados atuais.')) return;
       items = imp.map(function(i){ return Object.assign({hist:[]}, i); });
-      save(); render();
+      render();
+      // save all to supabase
+      setSyncStatus('loading', 'Importando...');
+      for (var i = 0; i < items.length; i++) {
+        await saveToSupabase(items[i]);
+      }
+      setSyncStatus('ok', 'Importado com sucesso!');
       alert('Importado! '+imp.length+' pendências carregadas.');
     } catch(err) { alert('Erro ao ler o arquivo.'); }
   };
@@ -445,7 +546,7 @@ document.getElementById('inp-imp').addEventListener('change', function(e){
   e.target.value = '';
 });
 
-// VOICE
+// ===== VOICE =====
 var recog = null;
 var listening = false;
 var micBtn = document.getElementById('btn-mic');
@@ -462,17 +563,13 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   micBtn.addEventListener('click', function(){ if(listening){recog.stop();}else{document.getElementById('inp-txt').value='';recog.start();} });
 } else { micBtn.style.display='none'; }
 
-// AI PANEL
+// ===== AUTO REFRESH a cada 30s =====
+setInterval(function(){
+  loadFromSupabase();
+}, 30000);
 
-
-load();
-render();
-</script>
-</body>
-</html>
-
-load();
-render();
+// ===== INIT =====
+loadFromSupabase();
 </script>
 </body>
 </html>
