@@ -454,41 +454,12 @@ function renderList() {
   }
   if (!vis.length) { el.innerHTML = '<p class="empty">Nenhuma pendência aqui.</p>'; return; }
 
+  el.innerHTML = '';
   vis.forEach(function(item) {
-    var existing = document.getElementById('it-'+item.id);
-    var hasOpenForm = updOpen[item.id] || edtOpen[item.id];
-    if (existing && hasOpenForm) {
-      // Don't re-render items with open forms — just update tags/text outside the form
-      return;
-    }
-    var newHtml = renderItem(item);
-    if (existing) {
-      var tmp = document.createElement('div');
-      tmp.innerHTML = newHtml;
-      existing.replaceWith(tmp.firstChild);
-    }
+    var tmp = document.createElement('div');
+    tmp.innerHTML = renderItem(item);
+    el.appendChild(tmp.firstChild);
   });
-
-  // Add new items and remove deleted ones
-  var visIds = vis.map(function(i){return i.id;});
-  var allRendered = el.querySelectorAll('.item');
-  allRendered.forEach(function(el2){
-    var id = el2.id.replace('it-','');
-    if (visIds.indexOf(id) === -1) el2.remove();
-  });
-  vis.forEach(function(item) {
-    if (!document.getElementById('it-'+item.id)) {
-      var tmp = document.createElement('div');
-      tmp.innerHTML = renderItem(item);
-      el.appendChild(tmp.firstChild);
-    }
-  });
-
-  // Sort items to match vis order
-  var sorted = vis.map(function(i){ return document.getElementById('it-'+i.id); }).filter(Boolean);
-  sorted.forEach(function(node){ el.appendChild(node); });
-
-  if (!el.children.length) el.innerHTML = '<p class="empty">Nenhuma pendência aqui.</p>';
 }
 
 function render() { renderStats(); renderWhoFilter(); renderList(); }
@@ -504,8 +475,8 @@ function delItem(id) {
   save(); render();
 }
 function toggleH(id) { expanded[id] = !expanded[id]; renderList(); }
-function openUpd(id) { updOpen[id] = true; edtOpen[id] = false; renderList(); }
-function closeUpd(id) { delete updOpen[id]; renderList(); }
+function openUpd(id) { updOpen[id] = true; edtOpen[id] = false; render(); }
+function closeUpd(id) { delete updOpen[id]; render(); }
 var pendingFile = {};
 function handleFile(id, input) {
   var file = input.files[0];
@@ -522,7 +493,7 @@ function delAttach(id, idx) {
   var it = items.find(function(i){return i.id===id;});
   if (!it || !it.attachments) return;
   it.attachments.splice(idx, 1);
-  save(); renderList();
+  save(); render();
 }
 function saveUpd(id) {
   var inp = document.getElementById('ui-'+id);
@@ -551,10 +522,10 @@ function saveUpd(id) {
   }
   delete updOpen[id];
   expanded[id] = true;
-  save(); renderList();
+  save(); render();
 }
-function openEdt(id) { edtOpen[id] = true; updOpen[id] = false; renderList(); }
-function closeEdt(id) { delete edtOpen[id]; renderList(); }
+function openEdt(id) { edtOpen[id] = true; updOpen[id] = false; render(); }
+function closeEdt(id) { delete edtOpen[id]; render(); }
 function saveEdt(id) {
   var txt = document.getElementById('et-'+id);
   var tip = document.getElementById('eti-'+id);
