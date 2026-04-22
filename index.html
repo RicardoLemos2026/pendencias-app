@@ -178,7 +178,6 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
       <button class="ibtn" id="btn-form" title="Nova tarefa">＋</button>
       <button class="ibtn" id="btn-exp" title="Exportar backup">↓</button>
       <button class="ibtn" title="Importar backup" id="btn-imp">↑</button>
-      <input type="file" id="inp-imp" accept=".json,application/json" style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px">
     </div>
   </div>
 </div>
@@ -253,8 +252,22 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
   </div>
 </div>
 
-<script>
-var KEY = 'pend_v8';
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+var firebaseConfig = {
+  apiKey: "AIzaSyCBwyYlHQ_-dHH9wyBsTuc-cjfTkU6aJ1U",
+  authDomain: "pendencias-ricardo.firebaseapp.com",
+  projectId: "pendencias-ricardo",
+  storageBucket: "pendencias-ricardo.firebasestorage.app",
+  messagingSenderId: "1068379257136",
+  appId: "1:1068379257136:web:940ac9798f6a45ed9430f5"
+};
+var fbApp = initializeApp(firebaseConfig);
+var db = getFirestore(fbApp);
+var colRef = collection(db, 'pendencias');
+
 var items = [];
 var filter = 'hoje';
 var searchQ = '';
@@ -266,11 +279,22 @@ var edtOpen = {};
 var aiMsgs = [];
 var aiLoading = false;
 
-function load() {
-  try { items = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { items = []; }
-  items.forEach(function(i) { if (!i.hist) i.hist = []; });
+// Realtime listener — sincroniza automaticamente entre todos os dispositivos
+onSnapshot(query(colRef, orderBy('dt', 'desc')), function(snapshot) {
+  items = snapshot.docs.map(function(d) { return d.data(); });
+  items.forEach(function(i) { if (!i.hist) i.hist = []; if (!i.attachments) i.attachments = []; });
+  render();
+}, function(err) {
+  console.error('Firestore error:', err);
+  document.getElementById('list').innerHTML = '<p class="empty">Erro ao conectar. Verifique sua conexão.</p>';
+});
+
+async function saveItem(item) {
+  try { await setDoc(doc(db, 'pendencias', item.id), item); } catch(e) { console.error('Erro ao salvar:', e); }
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch(e) {} }
+async function removeItem(id) {
+  try { await deleteDoc(doc(db, 'pendencias', id)); } catch(e) { console.error('Erro ao remover:', e); }
+}
 
 function isLate(p) {
   if (!p) return false;
@@ -295,7 +319,6 @@ function getPessoas() {
 function renderStats() {
   var ab = items.filter(function(i){return !i.done;});
   var late = ab.filter(function(i){return isLate(i.prazo);});
-  var del = ab.filter(function(i){return i.tipo==='delegada';});
   var dn = items.filter(function(i){return i.done;});
   var hj = new Date(); hj.setHours(23,59,59,0);
   var urgentes = ab.filter(function(i){ return i.prazo && new Date(i.prazo+'T23:59:59') <= hj; });
@@ -328,7 +351,7 @@ function renderWhoFilter() {
   }).join('');
 }
 
-function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function renderItem(item) {
   var late = isLate(item.prazo);
@@ -361,12 +384,11 @@ function renderItem(item) {
     '</div>'+
     '<div style="display:flex;gap:8px">'+
     '<input id="ul-'+item.id+'" placeholder="Link (opcional)" autocomplete="off" style="flex:1">'+
-    '<label style="display:flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--bd2);border-radius:var(--r);font-size:13px;color:var(--tx2);cursor:pointer;white-space:nowrap;background:var(--sur)">📎 Arquivo<input id="uf-'+item.id+'" type="file" style="display:none" onchange="handleFile(\''+item.id+'\',this)"></label>'+
     '</div>'+
     '<div id="uprev-'+item.id+'" style="font-size:12px;color:var(--ac)"></div>'+
     '<div style="display:flex;gap:8px">'+
-    '<button class="sbtn" onclick="saveUpd(\''+item.id+'\')">Salvar</button>'+
-    '<button class="cbtn" onclick="closeUpd(\''+item.id+'\')">✕</button>'+
+    '<button class="sbtn" onclick="window._saveUpd(\''+item.id+'\')">Salvar</button>'+
+    '<button class="cbtn" onclick="window._closeUpd(\''+item.id+'\')">✕</button>'+
     '</div>'+
     '</div>' : '';
 
@@ -381,27 +403,27 @@ function renderItem(item) {
     '<input class="edt-who" id="ew-'+item.id+'" value="'+esc(item.who||'')+'" placeholder="Quem? / Cliente?" autocomplete="off">'+
     '<input class="edt-dt" id="ed-'+item.id+'" type="date" value="'+(item.prazo||'')+'">'+
     '</div>'+
-    '<div class="edt-acts"><button class="sv-btn" onclick="saveEdt(\''+item.id+'\')">Salvar edição</button><button class="cx-btn" onclick="closeEdt(\''+item.id+'\')">Cancelar</button></div>'+
+    '<div class="edt-acts"><button class="sv-btn" onclick="window._saveEdt(\''+item.id+'\')">Salvar edição</button><button class="cx-btn" onclick="window._closeEdt(\''+item.id+'\')">Cancelar</button></div>'+
     '</div>' : '';
 
   var attachHTML = '';
   if (item.attachments && item.attachments.length > 0) {
     attachHTML = '<div class="attach-list">'+item.attachments.map(function(a,idx){
-      return '<div class="attach-item"><span class="attach-icon">'+(a.type==='file'?'📎':'🔗')+'</span><a href="'+esc(a.url)+'" target="_blank">'+esc(a.name)+'</a><button class="attach-del" onclick="delAttach(\''+item.id+'\','+idx+')">×</button></div>';
+      return '<div class="attach-item"><span class="attach-icon">'+(a.type==='file'?'📎':'🔗')+'</span><a href="'+esc(a.url)+'" target="_blank">'+esc(a.name)+'</a><button class="attach-del" onclick="window._delAttach(\''+item.id+'\','+idx+')">×</button></div>';
     }).join('')+'</div>';
   }
 
   var acts = !item.done && !isEdt ?
     '<div class="item-acts">'+
-    '<button class="abtn" onclick="openEdt(\''+item.id+'\')">✎</button>'+
-    '<button class="abtn" onclick="openUpd(\''+item.id+'\')">+ upd</button>'+
-    '<button class="abtn del" onclick="delItem(\''+item.id+'\')">×</button>'+
+    '<button class="abtn" onclick="window._openEdt(\''+item.id+'\')">✎</button>'+
+    '<button class="abtn" onclick="window._openUpd(\''+item.id+'\')">+ upd</button>'+
+    '<button class="abtn del" onclick="window._delItem(\''+item.id+'\')">×</button>'+
     '</div>' :
-    '<div class="item-acts"><button class="abtn del" onclick="delItem(\''+item.id+'\')">×</button></div>';
+    '<div class="item-acts"><button class="abtn del" onclick="window._delItem(\''+item.id+'\')">×</button></div>';
 
   return '<div class="item" id="it-'+item.id+'">'+
     '<div class="item-row">'+
-    '<div class="chk'+(item.done?' done':'')+'" onclick="toggleDone(\''+item.id+'\')">'+(item.done?'✓':'')+'</div>'+
+    '<div class="chk'+(item.done?' done':'')+'" onclick="window._toggleDone(\''+item.id+'\')">'+(item.done?'✓':'')+'</div>'+
     '<div class="item-body">'+
     '<div class="item-txt'+(item.done?' done':'')+'">'+esc(item.txt)+'</div>'+
     '<div class="tags">'+tags+'</div>'+
@@ -426,7 +448,7 @@ function renderList() {
   });
   else if (filter === 'abertas') vis = items.filter(function(i){return !i.done;});
   else if (filter === 'concluidas') vis = items.filter(function(i){return i.done;});
-  else vis = vis = items.filter(function(i){return !i.done && i.tipo===filter;});
+  else vis = items.filter(function(i){return !i.done && i.tipo===filter;});
   if (filterWho) vis = vis.filter(function(i){return i.who===filterWho;});
   if (searchQ) {
     var q = searchQ.toLowerCase();
@@ -454,7 +476,6 @@ function renderList() {
     });
   }
   if (!vis.length) { el.innerHTML = '<p class="empty">Nenhuma pendência aqui.</p>'; return; }
-
   el.innerHTML = '';
   vis.forEach(function(item) {
     var tmp = document.createElement('div');
@@ -465,38 +486,25 @@ function renderList() {
 
 function render() { renderStats(); renderWhoFilter(); renderList(); }
 
-// ACTIONS
-function toggleDone(id) {
+// ACTIONS — expostos via window._ para funcionar com onclick em type="module"
+window._toggleDone = function(id) {
   var it = items.find(function(i){return i.id===id;});
-  if (it) { it.done = !it.done; save(); render(); }
-}
-function delItem(id) {
+  if (it) { it.done = !it.done; saveItem(it); }
+};
+window._delItem = function(id) {
   if (!confirm('Remover esta pendência?')) return;
-  items = items.filter(function(i){return i.id!==id;});
-  save(); render();
-}
-function toggleH(id) { expanded[id] = !expanded[id]; renderList(); }
-function openUpd(id) { updOpen[id] = true; edtOpen[id] = false; render(); }
-function closeUpd(id) { delete updOpen[id]; render(); }
-var pendingFile = {};
-function handleFile(id, input) {
-  var file = input.files[0];
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    pendingFile[id] = {name: file.name, url: e.target.result, type: 'file'};
-    var prev = document.getElementById('uprev-'+id);
-    if (prev) prev.textContent = '📎 ' + file.name;
-  };
-  reader.readAsDataURL(file);
-}
-function delAttach(id, idx) {
+  removeItem(id);
+};
+window.toggleH = function(id) { expanded[id] = !expanded[id]; renderList(); };
+window._openUpd = function(id) { updOpen[id] = true; edtOpen[id] = false; render(); };
+window._closeUpd = function(id) { delete updOpen[id]; render(); };
+window._delAttach = function(id, idx) {
   var it = items.find(function(i){return i.id===id;});
   if (!it || !it.attachments) return;
   it.attachments.splice(idx, 1);
-  save(); render();
-}
-function saveUpd(id) {
+  saveItem(it);
+};
+window._saveUpd = function(id) {
   var inp = document.getElementById('ui-'+id);
   var txt = inp ? inp.value.trim() : '';
   if (!txt) return;
@@ -517,17 +525,13 @@ function saveUpd(id) {
     if (!url.startsWith('http')) url = 'https://' + url;
     it.attachments.push({name: url.replace(/^https?:\/\//, '').split('/')[0], url: url, type: 'link'});
   }
-  if (pendingFile[id]) {
-    it.attachments.push(pendingFile[id]);
-    delete pendingFile[id];
-  }
   delete updOpen[id];
   expanded[id] = true;
-  save(); render();
-}
-function openEdt(id) { edtOpen[id] = true; updOpen[id] = false; render(); }
-function closeEdt(id) { delete edtOpen[id]; render(); }
-function saveEdt(id) {
+  saveItem(it);
+};
+window._openEdt = function(id) { edtOpen[id] = true; updOpen[id] = false; render(); };
+window._closeEdt = function(id) { delete edtOpen[id]; render(); };
+window._saveEdt = function(id) {
   var txt = document.getElementById('et-'+id);
   var tip = document.getElementById('eti-'+id);
   var who = document.getElementById('ew-'+id);
@@ -540,8 +544,8 @@ function saveEdt(id) {
   it.who = who ? who.value.trim() : '';
   it.prazo = dt ? dt.value : '';
   delete edtOpen[id];
-  save(); render();
-}
+  saveItem(it);
+};
 
 // ADD
 function addItem() {
@@ -555,14 +559,14 @@ function addItem() {
     prazo: document.getElementById('inp-dt').value,
     done: false,
     hist: [],
+    attachments: [],
     dt: new Date().toISOString()
   };
-  items.unshift(newItem);
   document.getElementById('inp-txt').value = '';
   document.getElementById('inp-who').value = '';
   document.getElementById('inp-dt').value = '';
-  save(); render();
   document.getElementById('inp-txt').focus();
+  saveItem(newItem);
 }
 
 document.getElementById('btn-add').addEventListener('click', addItem);
@@ -591,11 +595,24 @@ document.getElementById('btn-form').addEventListener('click', function(){
   document.getElementById('btn-form').classList.toggle('on', hidden);
 });
 
-// IMPORT BUTTON — triggers file input (funciona no Safari PWA)
+// IMPORT — cola JSON e envia ao Firestore
 document.getElementById('btn-imp').addEventListener('click', function(){
-  document.getElementById('inp-imp').click();
+  var txt = prompt('Cole aqui o conteúdo do arquivo de backup (.json):');
+  if (!txt) return;
+  try {
+    var data = JSON.parse(txt);
+    var imp = data.pendencias || data;
+    if (!Array.isArray(imp)) { alert('Arquivo inválido.'); return; }
+    if (!confirm('Importar ' + imp.length + ' pendências? Isso vai adicionar ao Firestore.')) return;
+    imp.forEach(function(i) {
+      var item = Object.assign({hist:[], attachments:[]}, i);
+      saveItem(item);
+    });
+    alert('Importando ' + imp.length + ' pendências para o Firebase...');
+  } catch(err) { alert('Erro ao ler o JSON.'); }
 });
 
+// EXPORT
 document.getElementById('btn-exp').addEventListener('click', function(){
   var data = {pendencias: items, em: new Date().toISOString(), v: 'v8'};
   var blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
@@ -605,26 +622,6 @@ document.getElementById('btn-exp').addEventListener('click', function(){
   a.download = 'pendencias-' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.json';
   a.click();
   URL.revokeObjectURL(url);
-});
-
-// IMPORT
-document.getElementById('inp-imp').addEventListener('change', function(e){
-  var file = e.target.files[0];
-  if (!file) return;
-  var r = new FileReader();
-  r.onload = function(ev){
-    try {
-      var data = JSON.parse(ev.target.result);
-      var imp = data.pendencias || data;
-      if (!Array.isArray(imp)) { alert('Arquivo inválido.'); return; }
-      if (!confirm('Importar '+imp.length+' pendências? Substitui os dados atuais.')) return;
-      items = imp.map(function(i){ return Object.assign({hist:[]}, i); });
-      save(); render();
-      alert('Importado! '+imp.length+' pendências carregadas.');
-    } catch(err) { alert('Erro ao ler o arquivo.'); }
-  };
-  r.readAsText(file);
-  e.target.value = '';
 });
 
 // VOICE
@@ -740,9 +737,6 @@ document.getElementById('sort-sel').addEventListener('change', function(e){
   sortBy = e.target.value;
   renderList();
 });
-
-load();
-render();
 </script>
 </body>
 </html>
