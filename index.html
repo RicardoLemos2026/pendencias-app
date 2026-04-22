@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -178,7 +177,8 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
     <div class="hdr-btns">
       <button class="ibtn" id="btn-form" title="Nova tarefa">＋</button>
       <button class="ibtn" id="btn-exp" title="Exportar backup">↓</button>
-      <label class="ibtn" title="Importar backup" style="cursor:pointer">↑<input type="file" id="inp-imp" accept=".json" style="display:none"></label>
+      <button class="ibtn" title="Importar backup" id="btn-imp">↑</button>
+      <input type="file" id="inp-imp" accept=".json,application/json" style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px">
     </div>
   </div>
 </div>
@@ -591,7 +591,11 @@ document.getElementById('btn-form').addEventListener('click', function(){
   document.getElementById('btn-form').classList.toggle('on', hidden);
 });
 
-// EXPORT
+// IMPORT BUTTON — triggers file input (funciona no Safari PWA)
+document.getElementById('btn-imp').addEventListener('click', function(){
+  document.getElementById('inp-imp').click();
+});
+
 document.getElementById('btn-exp').addEventListener('click', function(){
   var data = {pendencias: items, em: new Date().toISOString(), v: 'v8'};
   var blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
