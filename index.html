@@ -227,6 +227,16 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.4)}
       <option value="pessoal">Pessoal</option>
     </select>
     <input class="inp-who" id="inp-who" placeholder="Quem? / Cliente?" autocomplete="off">
+    <select class="inp-who" id="inp-who-sel" style="flex:1;min-width:110px;display:none">
+      <option value="">Responsável...</option>
+      <option value="49091809|Bia viana">Bia Viana</option>
+      <option value="112019837|M. Willian Alves">Willian Alves</option>
+      <option value="112019839|Nathalia Giraldez">Nathalia Giraldez</option>
+      <option value="176515725|Igor Martins">Igor Martins</option>
+      <option value="81419683|Ricardo Lemos">Ricardo Lemos</option>
+      <option value="230454871|Fúbia Lima Tejada">Fúbia Lima Tejada</option>
+      <option value="112128109|Gilmar Sousa">Gilmar Sousa</option>
+    </select>
     <input class="inp-dt" id="inp-dt" type="date" placeholder="Data limite">
   </div>
 </div>
@@ -295,6 +305,43 @@ async function saveItem(item) {
 async function removeItem(id) {
   try { await deleteDoc(doc(db, 'pendencias', id)); } catch(e) { console.error('Erro ao remover:', e); }
 }
+
+// CLICKUP INTEGRATION
+var CU_KEY = 'pk_112128109_7L2PTAW1MGKCW3KBP7VJ5LUWZ1M5V2AC';
+var CU_LIST = '901713333084';
+var CU_BASE = 'https://api.clickup.com/api/v2';
+
+async function cuCreateTask(item) {
+  if (item.tipo !== 'trabalho') return;
+  if (item.cu_id) return;
+  try {
+    var body = { name: item.txt };
+    if (item.cu_assignee) body.assignees = [item.cu_assignee];
+    if (item.prazo) body.due_date = new Date(item.prazo + 'T23:59:59').getTime();
+    var res = await fetch(CU_BASE + '/list/' + CU_LIST + '/task', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'Authorization': CU_KEY},
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (data.id) {
+      item.cu_id = data.id;
+      await setDoc(doc(db, 'pendencias', item.id), item);
+    }
+  } catch(e) { console.error('ClickUp create error:', e); }
+}
+
+async function cuCloseTask(item) {
+  if (!item.cu_id) return;
+  try {
+    await fetch(CU_BASE + '/task/' + item.cu_id, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json', 'Authorization': CU_KEY},
+      body: JSON.stringify({status: 'complete'})
+    });
+  } catch(e) { console.error('ClickUp close error:', e); }
+}
+
 
 function isLate(p) {
   if (!p) return false;
@@ -489,7 +536,7 @@ function render() { renderStats(); renderWhoFilter(); renderList(); }
 // ACTIONS — expostos via window._ para funcionar com onclick em type="module"
 window._toggleDone = function(id) {
   var it = items.find(function(i){return i.id===id;});
-  if (it) { it.done = !it.done; saveItem(it); }
+  if (it) { it.done = !it.done; saveItem(it); if (it.done) cuCloseTask(it); }
 };
 window._delItem = function(id) {
   if (!confirm('Remover esta pendência?')) return;
@@ -547,15 +594,57 @@ window._saveEdt = function(id) {
   saveItem(it);
 };
 
+// WHO FIELD — alterna entre input (texto livre) e select (membros ClickUp)
+var CU_MEMBERS = {
+  '49091809': 'Bia viana',
+  '112019837': 'M. Willian Alves',
+  '112019839': 'Nathalia Giraldez',
+  '176515725': 'Igor Martins',
+  '81419683': 'Ricardo Lemos',
+  '230454871': 'Fúbia Lima Tejada',
+  '112128109': 'Gilmar Sousa'
+};
+
+function updateWhoField() {
+  var tipo = document.getElementById('inp-tipo').value;
+  var inp = document.getElementById('inp-who');
+  var sel = document.getElementById('inp-who-sel');
+  if (tipo === 'trabalho') {
+    inp.style.display = 'none';
+    sel.style.display = '';
+  } else {
+    inp.style.display = '';
+    sel.style.display = 'none';
+  }
+}
+document.getElementById('inp-tipo').addEventListener('change', updateWhoField);
+updateWhoField();
+
 // ADD
 function addItem() {
   var txt = document.getElementById('inp-txt').value.trim();
   if (!txt) return;
+  var tipo = document.getElementById('inp-tipo').value;
+  var who = '';
+  var cu_assignee = null;
+  if (tipo === 'trabalho') {
+    var selVal = document.getElementById('inp-who-sel').value;
+    if (selVal) {
+      var parts = selVal.split('|');
+      cu_assignee = parseInt(parts[0]);
+      who = parts[1];
+    }
+    document.getElementById('inp-who-sel').value = '';
+  } else {
+    who = document.getElementById('inp-who').value.trim();
+    document.getElementById('inp-who').value = '';
+  }
   var newItem = {
     id: Date.now().toString(36) + Math.random().toString(36).substr(2,5),
     txt: txt,
-    tipo: document.getElementById('inp-tipo').value,
-    who: document.getElementById('inp-who').value.trim(),
+    tipo: tipo,
+    who: who,
+    cu_assignee: cu_assignee,
     prazo: document.getElementById('inp-dt').value,
     done: false,
     hist: [],
@@ -563,10 +652,9 @@ function addItem() {
     dt: new Date().toISOString()
   };
   document.getElementById('inp-txt').value = '';
-  document.getElementById('inp-who').value = '';
   document.getElementById('inp-dt').value = '';
   document.getElementById('inp-txt').focus();
-  saveItem(newItem);
+  saveItem(newItem); cuCreateTask(newItem);
 }
 
 document.getElementById('btn-add').addEventListener('click', addItem);
